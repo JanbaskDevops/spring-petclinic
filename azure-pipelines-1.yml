@@ -4,23 +4,30 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-jobs:
-- job: Build
-  steps:
-  - task: JavaToolInstaller@0
-    inputs:
-      versionSpec: '17'
-      jdkArchitectureOption: 'x64'
-      jdkSourceOption: 'PreInstalled'
-        
-  - script: 'mvn clean package -DskipTests'
-    displayName: 'Run Tests'
-  - task: CopyFiles@2
-    inputs:
-      Contents: "**/target/spring-petclinic-3.1.0-SNAPSHOT.jar"
-      TargetFolder: $(Build.ArtifactStagingDirectory)
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathToPublish: $(Build.ArtifactStagingDirectory)
-      artifactName: SpringPetClinic
-
+stages:
+- stage: 'Production'
+  jobs:
+  - deployment: 'DeployToProduction'
+    environment: 'Development'
+    strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: DownloadBuildArtifacts@0
+              inputs:
+                buildType: 'current'
+                downloadType: 'single'
+                artifactName: 'drop'
+                downloadPath: '$(System.DefaultWorkingDirectory)'
+            - task: AzureResourceManagerTemplateDeployment@3
+              inputs:
+                deploymentScope: 'Resource Group'
+                azureResourceManagerConnection: '<subscription-connection-name>'
+                subscriptionId: '<subscriptiont-id>'
+                action: 'Create Or Update Resource Group'
+                resourceGroupName: 'erwin-prod'
+                location: 'West Europe'
+                templateLocation: 'Linked artifact'
+                csmFile: '$(System.DefaultWorkingDirectory)/drop/templates/api.json'
+                csmParametersFile: '$(System.DefaultWorkingDirectory)/drop/templates/api.prod.json'
+                deploymentMode: 'Incremental'
